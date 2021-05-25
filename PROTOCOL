@@ -1,0 +1,18 @@
+First 2 bits:
+    00 - GENERAL
+    01 - TRANSposing motor
+    10 - YAW motor
+    11 - PITCH motor
+
+If GENERAL: 
+    000000 - stop moving
+    000001 - resume moving
+
+if MOTORS:
+    a) 00 (Set target position):
+        16 bits - target pos (long/float)
+    c) 01 (Set speed in steps per second):
+        16 bits - speed value
+
+
+
