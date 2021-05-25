@@ -1,9 +1,9 @@
 #ifndef ROT_H
 #define ROT_H
 
-#define TRANS_STOPPER_PIN  8
-#define YAW_STOPPER_PIN    9
-#define PITCH_STOPPER_PIN 10
+#define TRANS_STOPPER_PIN  9
+#define YAW_STOPPER_PIN    10
+#define PITCH_STOPPER_PIN  11
 
 #define ROT_TARGET(m, tgt) (m.tgt = ((tgt < m.len) ? ((tgt > 0) ? tgt : 0) : m.len))
 #define ROT_STOP(m)        (m.speed = 0, m.moving = false, m.tgt = m.pos)
@@ -68,29 +68,10 @@ rot_tick(struct _motor *m, uint32_t mcs) {
 }
 
 
-/* Установка скорости в шагах в секунду */
-void
-rot_step_speed(struct _motor *m, uint16_t steps)
-{
-    
-}
-
-
-/* Прерывания по достижению границы */
-void 
-trans_at_end() { ROT_RESET(trans); }
-
-void 
-yaw_at_end()   { ROT_RESET(yaw);   }
-
-void 
-pitch_at_end() { ROT_RESET(pitch); }
-
-
-
 int8_t 
 rot_init()
-{ 
+{
+    bool end_t = 0, end_y = 0, end_p = 0;
     uint32_t time;
 
     trans.delta = 10000;
@@ -103,9 +84,9 @@ rot_init()
     yaw.pin_d   = 5;
     pitch.pin_s = 6; 
     pitch.pin_d = 7;
-    trans.len = 4096;
-    yaw.len   = 4096;
-    pitch.len = 4096;
+    trans.len = 6400;
+    yaw.len   = 6400;
+    pitch.len = 6400;
 
     pinMode(trans.pin_s, OUTPUT);
     pinMode(trans.pin_d, OUTPUT);
@@ -118,28 +99,50 @@ rot_init()
     pinMode(YAW_STOPPER_PIN,   INPUT_PULLUP);
     pinMode(PITCH_STOPPER_PIN, INPUT_PULLUP);
 
-    attachInterrupt(TRANS_STOPPER_PIN, trans_at_end, FALLING);
-    attachInterrupt(  YAW_STOPPER_PIN,   yaw_at_end, FALLING);
-    attachInterrupt(PITCH_STOPPER_PIN, pitch_at_end, FALLING);
-
     /* позицию определяем как край и движемся в нуль */
     trans.pos = -1;
     yaw.pos   = -1; 
     pitch.pos = -1;
-    ROT_SPEED(trans, 100);
-    ROT_SPEED(yaw,   100);
-    ROT_SPEED(pitch, 100);
+    ROT_SPEED(trans, 800);
+    ROT_SPEED(yaw,   800);
+    ROT_SPEED(pitch, 800);
     /* target по умолчанию инициализирован нулём */
     trans.moving = true;  
     yaw.moving   = true;
     pitch.moving = true;
+    /* после достижения края - ROT_RESET */
+    /*Serial.println("info: reaching initial state");
     while (yaw.moving || trans.moving || pitch.moving) {
-        time = micros();
-        rot_tick(yaw_p, time);
-        rot_tick(trans_p, time);
-        rot_tick(pitch_p, time);
-        delay(5);
-    }  /* после достижения края - reset в прерывании */ 
+        time = micros(); 
+        if (trans.moving) {
+            rot_tick(trans_p, time);
+            if (0 == digitalRead(TRANS_STOPPER_PIN)) {
+                ROT_FRONT(trans);
+                rot_steps(trans_p, 10);
+                ROT_RESET(trans);
+            }
+        } 
+        if (yaw.moving) {
+            rot_tick(yaw_p, time);
+            if (0 == digitalRead(YAW_STOPPER_PIN)) {
+                ROT_FRONT(yaw);
+                rot_steps(yaw_p, 10);
+                ROT_RESET(yaw);
+            }
+        }
+        if (pitch.moving) { 
+            rot_tick(pitch_p, time);
+            if (0 == digitalRead(PITCH_STOPPER_PIN)) {
+                ROT_FRONT(pitch);
+                rot_steps(pitch_p, 10);
+                ROT_RESET(pitch);
+            }
+        }
+        delay(10);
+    }*/
+    ROT_RESET(trans);
+    ROT_RESET(yaw);
+    ROT_RESET(pitch);
 
     return 0;
 }

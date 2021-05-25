@@ -5,23 +5,25 @@
 
 
 enum {
-    GENERAL = 0b00, TARGET = 0b000000, STOP_MOVING   = 0b000000,  
-    TRANS   = 0b01, SPEED  = 0b000001, RESUME_MOVING = 0b000001,
-    YAW     = 0b10,  
-    PITCH   = 0b11, 
+    GENERAL = '0', TARGET = '0', STOP_MOVING   = '0',  
+    TRANS   = '1', SPEED  = '1', RESUME_MOVING = '1',
+    YAW     = '2', 
+    PITCH   = '3', 
 };
 
 struct {
-    unsigned type : 2;
-    unsigned action : 6;
-    int16_t value;
+    uint8_t type;
+    uint8_t action;
+    uint16_t value;
 } frame;
 
 
 inline int8_t
 process_dtm()
 {
-    if (Serial.available() > 2 && sizeof(frame) == Serial.readBytes((uint8_t*)&frame, sizeof(frame))) {
+    if (Serial.available() >= 4) {
+        Serial.readBytes((uint8_t*)&frame, sizeof(frame));
+
         switch (frame.type) {
         case GENERAL:
             switch (frame.action) {

@@ -28,29 +28,31 @@ setup() {
     init_dtm();
     Serial.print("info: DTM initialized, sizeof(frame) = ");
     Serial.println(sizeof(frame));
-
-    /*Serial.println("info: Initializing rotation system.");
+    
+    Serial.println("info: Initializing rotation system.");
     rot_init(); 
     Serial.println("info: Motors are in initial state.");
     
-    ROT_SPEED(trans, 100);
-    ROT_SPEED(yaw,   100);
-    ROT_SPEED(pitch, 100);
+    ROT_SPEED(trans, 800);
+    ROT_SPEED(yaw,   800);
+    ROT_SPEED(pitch, 800);
 
-    trans.tgt = 1024;
-    trans.moving = true;*/
+    trans.tgt = 3200;
+    trans.moving = true;
 }
 
 void 
 loop() {
-    /*time = micros();
+    time = micros();
 
     rot_tick(trans_p, time);
     rot_tick(yaw_p,   time);
     rot_tick(pitch_p, time); 
 
-    if (time - db_time >= 1000000)
+    if (time - db_time >= 1000000) {
+        db_time = time;
         debug_print();
-    */
+    }
+     
     process_dtm();
 }
