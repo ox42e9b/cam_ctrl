@@ -4,73 +4,74 @@
 #include "rot.h"
 
 
+enum { GENERAL = 'g', TRANS = 't', YAW = 'y', PITCH = 'p' };
+
 enum {
-    GENERAL = '0', TARGET = '0', STOP_MOVING   = '0',  
-    TRANS   = '1', SPEED  = '1', RESUME_MOVING = '1',
-    YAW     = '2', 
-    PITCH   = '3', 
+    TARGET='t', REL_TARGET='T', SPEED='s', REL_SPEED='S', 
+    PAUSE='p',  UNPAUSE='u', DEBUG_PRINT='d', 
 };
+
 
 struct {
     uint8_t type;
     uint8_t action;
-    uint16_t value;
+    char value[14];
 } frame;
 
 
 inline int8_t
 process_dtm()
 {
-    if (Serial.available() >= 4) {
-        Serial.readBytes((uint8_t*)&frame, sizeof(frame));
+    static uint32_t value;
+    static struct _motor *m;
 
-        switch (frame.type) {
-        case GENERAL:
-            switch (frame.action) {
-            case STOP_MOVING:
-                Serial.println("Stop moving recieved");
-                break;
-            case RESUME_MOVING:
-                Serial.println("Resume moving received");
-                break;
-            }
-            break;
-        case TRANS:
-            switch (frame.action) {
-            case TARGET:
-                Serial.print("Target recieved: ");
-                Serial.println(frame.value);
-                break;
-            case SPEED:
-                Serial.print("Speed recieved: ");
-                Serial.println(frame.value);
-                break;
-            }
-            break;
-        case YAW:
+    if (Serial.available() >= 2) {
+        Serial.readBytesUntil('\n', (uint8_t*)&frame, sizeof(frame));
+
+        m = NULL;
+        if (frame.type == TRANS)
+            m = trans_p;
+        else if (frame.type == YAW)
+            m = yaw_p;
+        else if (frame.type == PITCH)
+            m = pitch_p;
+
+        if (NULL != m) {
+            value = atoi(frame.value);
             switch (frame.action) {
             case TARGET:
                 Serial.print("Target recieved: ");
-                Serial.println(frame.value);
+                Serial.println(value);
+                rot_set_target(m, value);
+                break;
+            case REL_TARGET:
+                rot_set_target(m, m->pos + value);
                 break;
             case SPEED:
-                Serial.print("Speed recieved: ");
-                Serial.println(frame.value);
+                rot_set_speed(m, value);
                 break;
-            }
-            break;
-        case PITCH:
-            switch (frame.action) {
-            case TARGET:
-                Serial.print("Target recieved: ");
-                Serial.println(frame.value);
+            case REL_SPEED:
+                rot_set_speed(m, m->speed + value);
+            case PAUSE:
+                m->moving = false; 
                 break;
-            case SPEED:
-                Serial.print("Speed recieved: ");
-                Serial.println(frame.value);
+            case UNPAUSE:
+                m->moving = true;
                 break;
-            }
-            break;
+            case DEBUG_PRINT: 
+                Serial.print((m == trans_p) ? "\n[Trans" : ((m == yaw_p) ? "\n[yaw" : "\n[pitch"));
+                Serial.println(" motor]");
+                Serial.print("position: ");
+                Serial.println(m->pos);
+                Serial.print("target: ");
+                Serial.println(m->tgt);
+                Serial.print("speed: ");
+                Serial.println(m->speed);
+                Serial.print("moving: ");
+                Serial.println(m->moving);
+                Serial.println();
+                break;
+            } 
         }  /* очищаем обработанный кадр */
         memset(&frame, 0, sizeof(frame));
     }
