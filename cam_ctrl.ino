@@ -10,12 +10,10 @@ uint32_t db_time = 0;
 void 
 setup() {
     init_dtm();
-    Serial.print("info: DTM initialized, sizeof(frame) = ");
-    Serial.println(sizeof(frame));
+    Serial.println("info: DTM initialized");
     
-    Serial.println("info: Initializing rotation system.");
     rot_init(); 
-    Serial.println("info: Motors are in initial state."); 
+    Serial.println("info: ROT initialized"); 
 }
 
 void 

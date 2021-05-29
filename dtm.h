@@ -22,11 +22,11 @@ struct {
 inline int8_t
 process_dtm()
 {
-    static uint32_t value;
+    static int32_t value;
     static struct _motor *m;
 
     if (Serial.available() >= 2) {
-        Serial.readBytesUntil('\n', (uint8_t*)&frame, sizeof(frame));
+        Serial.readBytesUntil('\n', (uint8_t*)&frame, sizeof(frame) - 1);
 
         m = NULL;
         if (frame.type == TRANS)
@@ -40,8 +40,6 @@ process_dtm()
             value = atoi(frame.value);
             switch (frame.action) {
             case TARGET:
-                Serial.print("Target recieved: ");
-                Serial.println(value);
                 rot_set_target(m, value);
                 break;
             case REL_TARGET:
@@ -52,6 +50,7 @@ process_dtm()
                 break;
             case REL_SPEED:
                 rot_set_speed(m, m->speed + value);
+                break;
             case PAUSE:
                 m->moving = false; 
                 break;

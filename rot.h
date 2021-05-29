@@ -1,13 +1,17 @@
 #ifndef ROT_H
 #define ROT_H
 
+#include <limits.h>
+#include <math.h>
+
 #define TRANS_STOPPER_PIN  9
 #define YAW_STOPPER_PIN    11
 #define PITCH_STOPPER_PIN  10
 
-#define ROT_STEP_DELAY 4  /* не меньше 4 (мкс) */
+#define ROT_STEP_DELAY 10  /* не меньше 4 (мкс) */
 
-#define MAX_SPEED 12800
+#define MAX_TRANS_SPEED 23000
+#define MAX_ROT_SPEED 1640 
 
 
 struct _motor {
@@ -15,9 +19,9 @@ struct _motor {
     int8_t dir;
     uint8_t moving; 
     uint32_t prev, delta;  /* время пред-го тика, период тика (mcs) */
-    uint32_t speed;        /* шагов в секунду */
-    uint32_t tgt, pos;
-    uint32_t len; 
+    int32_t speed;         /* шагов в секунду */
+    int32_t tgt, pos;
+    int32_t len; 
 } trans = {0}, 
   yaw   = {0}, 
   pitch = {0};
@@ -25,7 +29,6 @@ struct _motor {
 
 void rot_set_target(struct _motor* m, int32_t target);
 void rot_set_speed(struct _motor* m, int32_t speed);
-inline void rot_step(struct _motor* m);
 inline void rot_tick(struct _motor* m, uint32_t mcs);
 int8_t rot_init();
 
@@ -52,7 +55,11 @@ rot_set_target(struct _motor *m, int32_t target)
 void  /* шаги в секунду */
 rot_set_speed(struct _motor *m, int32_t speed)
 {
-    m->speed = (speed > 0) ? ((speed < MAX_SPEED) ? speed : MAX_SPEED) : 0;
+    if (m == trans_p)
+        m->speed = (speed > 0) ? ((speed < MAX_TRANS_SPEED) ? speed : MAX_TRANS_SPEED) : 0;
+    else
+        m->speed = (speed > 0) ? ((speed < MAX_ROT_SPEED) ? speed : MAX_ROT_SPEED) : 0;
+
     if (0 == speed)
         m->moving = false; 
     else
@@ -61,22 +68,17 @@ rot_set_speed(struct _motor *m, int32_t speed)
 
 
 inline void
-rot_step(struct _motor *m)
-{
-    digitalWrite(m->pin_s, 1);
-    delayMicroseconds(ROT_STEP_DELAY);
-    digitalWrite(m->pin_s, 0);
-}
-
-inline void
 rot_tick(struct _motor *m, uint32_t mcs) {
-    if (m->moving && mcs - m->prev >= m->delta) {        
+    if (m->moving && abs(mcs - m->prev) >= m->delta) {        
         m->prev = mcs;
         if (m->pos == m->tgt)                            
             m->moving = false;    
         else {              
-            m->pos += m->dir;                                                
-            rot_step(m);                              
+            m->pos += m->dir;                              
+            /* шаг для step-dir драйвера */   
+            digitalWrite(m->pin_s, 1);
+            delayMicroseconds(ROT_STEP_DELAY);
+            digitalWrite(m->pin_s, 0);
         }
     }
 }
@@ -86,10 +88,6 @@ int8_t
 rot_init()
 {
     uint32_t time;
-
-    trans.delta = 9984;
-    yaw.delta = 9984;
-    pitch.delta = 9984;
 
     trans.pin_s = 2; 
     trans.pin_d = 3; 
@@ -113,9 +111,9 @@ rot_init()
     pinMode(PITCH_STOPPER_PIN, INPUT_PULLUP);
 
     /* позицию определяем как край и движемся в нуль */
-    trans.pos = -1;  /* (переполнение подразумевается) */
-    yaw.pos   = -1; 
-    pitch.pos = -1;
+    trans.pos = LONG_MAX;
+    yaw.pos   = LONG_MAX; 
+    pitch.pos = LONG_MAX;
 
     rot_set_speed(trans_p, 1500);
     rot_set_speed(yaw_p,   800);
@@ -134,7 +132,7 @@ rot_init()
 
     delay(7000);
 
-    Serial.println("info: reaching initial state");
+    Serial.println("info: motors are reaching initial state");
     while (yaw.moving || trans.moving || pitch.moving) {
         time = micros(); 
         rot_tick(trans_p, time); 
@@ -142,18 +140,18 @@ rot_init()
         rot_tick(pitch_p, time); 
 
         if (!end_t && trans.moving && (0 == digitalRead(TRANS_STOPPER_PIN))) {
-            trans.pos = 0; 
-            Serial.println("info: trans reached");
+            trans.pos = 0;
+            Serial.println("info: trans reached the end");
             end_t = true;
         } 
         if (!end_y && yaw.moving && (0 == digitalRead(YAW_STOPPER_PIN))) { 
             yaw.pos = 0;
-            Serial.println("info: yaw reached");
+            Serial.println("info: yaw reached the end");
             end_y = true;
         }
         if (!end_p && pitch.moving && (0 == digitalRead(PITCH_STOPPER_PIN))) {
             pitch.pos = 0;
-            Serial.println("info: pitch reached");
+            Serial.println("info: pitch reached the end");
             end_p = true;
         }
     }
