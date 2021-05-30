@@ -4,6 +4,8 @@
 #include <limits.h>
 #include <math.h>
 
+#define VALID_SET_ELEMENT(x, a, b) ((x > a) ? ((x < b) ? x : b) : a)
+
 #define TRANS_STOPPER_PIN  9
 #define YAW_STOPPER_PIN    11
 #define PITCH_STOPPER_PIN  10
@@ -15,13 +17,13 @@
 
 
 struct _motor {
-    uint8_t pin_s, pin_d;
-    int8_t dir;
-    uint8_t moving; 
+    uint8_t pin_s, pin_d;  /* номера step, dir пинов к драйверу     */
+    int8_t dir;            /* +-1 : добавляется к pos за 1 тик      */
+    uint8_t moving;        /* если false, то тик не срабатывает     */ 
     uint32_t prev, delta;  /* время пред-го тика, период тика (mcs) */
-    int32_t speed;         /* шагов в секунду */
-    int32_t tgt, pos;
-    int32_t len; 
+    int32_t speed;         /* шагов в секунду                       */
+    int32_t tgt, pos;      /* в шагах                               */
+    int32_t min, max, max_speed;  /* ограничение вращения           */ 
 } trans = {0}, 
   yaw   = {0}, 
   pitch = {0};
@@ -41,7 +43,7 @@ struct _motor* pitch_p = &pitch;
 void
 rot_set_target(struct _motor *m, int32_t target)
 {
-    m->tgt = (target >= 0) ? ((target < m->len) ? target : m->len) : 0;
+    m->tgt = VALID_SET_ELEMENT(target, m->min, m->max);
 
     if (m->tgt < m->pos) {
         digitalWrite(m->pin_d, 0);
@@ -52,13 +54,10 @@ rot_set_target(struct _motor *m, int32_t target)
     } 
 }
 
-void  /* шаги в секунду */
+void 
 rot_set_speed(struct _motor *m, int32_t speed)
 {
-    if (m == trans_p)
-        m->speed = (speed > 0) ? ((speed < MAX_TRANS_SPEED) ? speed : MAX_TRANS_SPEED) : 0;
-    else
-        m->speed = (speed > 0) ? ((speed < MAX_ROT_SPEED) ? speed : MAX_ROT_SPEED) : 0;
+    m->speed = VALID_SET_ELEMENT(speed, 0, m->max_speed);
 
     if (0 == speed)
         m->moving = false; 
@@ -75,7 +74,7 @@ rot_tick(struct _motor *m, uint32_t mcs) {
             m->moving = false;    
         else {              
             m->pos += m->dir;                              
-            /* шаг для step-dir драйвера */   
+            /* шаг step-dir драйвера */   
             digitalWrite(m->pin_s, 1);
             delayMicroseconds(ROT_STEP_DELAY);
             digitalWrite(m->pin_s, 0);
@@ -95,9 +94,16 @@ rot_init()
     yaw.pin_d   = 5;
     pitch.pin_s = 6; 
     pitch.pin_d = 7;
-    trans.len = 46000;
-    yaw.len   = 3280;
-    pitch.len = 3280;
+
+    trans.max = 46000;
+    trans.min = 0;
+    trans.max_speed = 23000; 
+    yaw.max   = LONG_MAX; 
+    yaw.min   = LONG_MIN;
+    yaw.max_speed   = 3280; 
+    pitch.max = 3280;
+    pitch.min = 0;
+    pitch.max_speed = 2460;
 
     pinMode(trans.pin_s, OUTPUT);
     pinMode(trans.pin_d, OUTPUT);
@@ -130,7 +136,7 @@ rot_init()
     /* после достижения края запоминаем позицию */
     bool end_t = 0, end_y = 0, end_p = 0;
 
-    delay(7000);
+    delay(7000);  /* FIXME */
 
     Serial.println("info: motors are reaching initial state");
     while (yaw.moving || trans.moving || pitch.moving) {

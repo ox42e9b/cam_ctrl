@@ -7,10 +7,9 @@
 enum { GENERAL = 'g', TRANS = 't', YAW = 'y', PITCH = 'p' };
 
 enum {
-    TARGET='t', REL_TARGET='T', SPEED='s', REL_SPEED='S', 
-    PAUSE='p',  UNPAUSE='u', DEBUG_PRINT='d', 
+    TARGET = 't', REL_TARGET = 'T', SPEED = 's', REL_SPEED = 'S', 
+    PAUSE  = 'p', UNPAUSE = 'u', DEBUG_PRINT = 'd', 
 };
-
 
 struct {
     uint8_t type;
