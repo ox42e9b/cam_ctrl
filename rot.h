@@ -12,11 +12,8 @@
 
 #define ROT_STEP_DELAY 10  /* не меньше 4 (мкс) */
 
-#define MAX_TRANS_SPEED 23000
-#define MAX_ROT_SPEED 1640 
 
-
-struct _motor {
+struct _stepper {
     uint8_t pin_s, pin_d;  /* номера step, dir пинов к драйверу     */
     int8_t dir;            /* +-1 : добавляется к pos за 1 тик      */
     uint8_t moving;        /* если false, то тик не срабатывает     */ 
@@ -29,19 +26,19 @@ struct _motor {
   pitch = {0};
 
 
-void rot_set_target(struct _motor* m, int32_t target);
-void rot_set_speed(struct _motor* m, int32_t speed);
-inline void rot_tick(struct _motor* m, uint32_t mcs);
+void rot_set_target(struct _stepper* m, int32_t target);
+void rot_set_speed(struct _stepper* m, int32_t speed);
+inline void rot_tick(struct _stepper* m, uint32_t mcs);
 int8_t rot_init();
 
 
-struct _motor* trans_p = &trans;
-struct _motor* yaw_p   = &yaw;
-struct _motor* pitch_p = &pitch;
+struct _stepper* trans_p = &trans;
+struct _stepper* yaw_p   = &yaw;
+struct _stepper* pitch_p = &pitch;
 
 
 void
-rot_set_target(struct _motor *m, int32_t target)
+rot_set_target(struct _stepper *m, int32_t target)
 {
     m->tgt = VALID_SET_ELEMENT(target, m->min, m->max);
 
@@ -55,7 +52,7 @@ rot_set_target(struct _motor *m, int32_t target)
 }
 
 void 
-rot_set_speed(struct _motor *m, int32_t speed)
+rot_set_speed(struct _stepper *m, int32_t speed)
 {
     m->speed = VALID_SET_ELEMENT(speed, 0, m->max_speed);
 
@@ -67,7 +64,7 @@ rot_set_speed(struct _motor *m, int32_t speed)
 
 
 inline void
-rot_tick(struct _motor *m, uint32_t mcs) {
+rot_tick(struct _stepper *m, uint32_t mcs) {
     if (m->moving && abs(mcs - m->prev) >= m->delta) {        
         m->prev = mcs;
         if (m->pos == m->tgt)                            

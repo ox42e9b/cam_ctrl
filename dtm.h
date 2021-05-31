@@ -22,7 +22,7 @@ inline int8_t
 process_dtm()
 {
     static int32_t value;
-    static struct _motor *m;
+    static struct _stepper *m;
 
     if (Serial.available() >= 2) {
         Serial.readBytesUntil('\n', (uint8_t*)&frame, sizeof(frame) - 1);
@@ -81,7 +81,7 @@ process_dtm()
 int8_t
 init_dtm()
 {
-    Serial.begin(9600);
+    Serial.begin(38400);
 
     return 0;
 }
