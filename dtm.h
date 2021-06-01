@@ -6,9 +6,11 @@
 
 enum { GENERAL, TRANS, YAW, PITCH};
 
+enum { RESET };
+
 enum {
     TARGET, REL_TARGET, SPEED, REL_SPEED, 
-    PAUSE, UNPAUSE, DEBUG_PRINT, 
+    PAUSE, UNPAUSE, DEBUG_PRINT
 };
 
 struct {
@@ -27,12 +29,21 @@ process_dtm()
         Serial.readBytes((uint8_t*)&frame, sizeof(frame));
 
         m = NULL;
-        if (frame.type == TRANS)
+        switch (frame.type) {
+        case GENERAL:
+            if (frame.action == RESET)
+                rot_reset();
+            break;
+        case TRANS:
             m = trans_p;
-        else if (frame.type == YAW)
+            break;
+        case YAW:
             m = yaw_p;
-        else if (frame.type == PITCH)
+            break;
+        case PITCH:
             m = pitch_p;
+            break;
+        }
 
         if (NULL != m) {
             switch (frame.action) {

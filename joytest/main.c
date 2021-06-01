@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <linux/joystick.h>
 #include <math.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,8 +12,6 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-#define NEW_TARGET(a, b) ((a > 0 && b < 0) || (a < 0 && b > 0) || (a == 0 && b != 0) || (a != 0 && b == 0))
 
 /* check this with jstest */
 #define JOYDEV "/dev/input/js0"
@@ -23,12 +22,14 @@
 
 enum { GENERAL, TRANS, YAW, PITCH};
 
+enum { RESET };
+
 enum {
     TARGET, REL_TARGET, SPEED, REL_SPEED, 
     PAUSE, UNPAUSE, DEBUG_PRINT, 
 };
 
-struct {
+struct _frame {
     unsigned type   : 2;
     unsigned action : 6;
     int32_t value;
@@ -53,15 +54,16 @@ int
 main(int argc, char* argv[])
 {
     struct sockaddr_rc addr = {0};
-    char str_addr[18] = "88:F8:72:35:58:6F";
+    char str_addr[18] = "98:D3:71:F9:84:96";
     int sock, status;
     int joy_fd, *axis = NULL, num_of_axis = 0, num_of_buttons = 0, x;
     uint32_t prev_time;
     char *button = NULL, name_of_joystick[80];
     struct js_event js_ev;
     struct _stepper *m;
+    bool reset_sent = false;
 
-    /*if (2 == argc)
+    if (2 == argc)
         strncpy(str_addr, argv[1], 18);
     
     sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
@@ -75,13 +77,10 @@ main(int argc, char* argv[])
 
     status = connect(sock, (struct sockaddr*)&addr, sizeof(addr));
 
-    if (0 == status)
-        status = write(sock, "hello!", 6);
-
-    if (status < 0) 
-        perror("error"); 
-
-    close(sock);*/
+    if (status < 0) { 
+        perror("bluetooth"); 
+        return -1;
+    }
     
     joy_fd = open(JOYDEV, O_RDONLY); 
    
@@ -108,6 +107,8 @@ main(int argc, char* argv[])
 
         switch (js_ev.type & ~JS_EVENT_INIT) {
 	case JS_EVENT_AXIS:
+            if (!reset_sent)
+                continue;
 	    switch (js_ev.number) {
                 case TRANS_AXIS:
                     m = trans_p;
@@ -127,7 +128,7 @@ main(int argc, char* argv[])
             if (js_ev.value == 0 && axis[js_ev.number] != 0) {
                 frame.action = SPEED;
                 frame.value = 0;
-                //write(sock, &frame, sizeof(struct _frame));
+                write(sock, &frame, sizeof(struct _frame));
                 axis[js_ev.number] = 0;
                 puts("\033[34mstop\033[0m");
             }
@@ -136,20 +137,27 @@ main(int argc, char* argv[])
                      || (0 != js_ev.value && 0 == axis[js_ev.number])) {
                 frame.action = TARGET;
                 frame.value = (js_ev.value < 0) ? m->min : m->max;
-                //write(sock, &frame, sizeof(struct _frame)); 
+                write(sock, &frame, sizeof(struct _frame)); 
                 axis[js_ev.number] = js_ev.value;
                 puts("\033[32mnew target\033[0m");
             }
             frame.action = REL_SPEED;
             frame.value = round((js_ev.value - axis[js_ev.number]) * m->scale); 
             if (abs(frame.value) > m->dv) { 
-                //write(sock, &frame, sizeof(struct _frame));
+                write(sock, &frame, sizeof(struct _frame));
                 axis[js_ev.number] = js_ev.value;
                 printf("\033[35mrel speed: \033[33m%d\033[0m\n", frame.value);
             }
 	    break;
 	case JS_EVENT_BUTTON:
-	    button[js_ev.number] = js_ev.value;
+            if (1 == js_ev.number && js_ev.value == 1) { 
+                frame.type = GENERAL;
+                frame.action = RESET;
+                write(sock, &frame, sizeof(struct _frame));
+                printf("\033[36mreset\033[0m\n");
+                reset_sent = true;
+            }
+            button[js_ev.number] = js_ev.value;
 	    break;
 	}
     }
