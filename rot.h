@@ -32,9 +32,9 @@ inline void rot_tick(struct _stepper* m, uint32_t mcs);
 int8_t rot_init();
 
 
-struct _stepper* trans_p = &trans;
-struct _stepper* yaw_p   = &yaw;
-struct _stepper* pitch_p = &pitch;
+struct _stepper *trans_p = &trans;
+struct _stepper *yaw_p   = &yaw;
+struct _stepper *pitch_p = &pitch;
 
 
 void

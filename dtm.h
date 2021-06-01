@@ -4,28 +4,27 @@
 #include "rot.h"
 
 
-enum { GENERAL = 'g', TRANS = 't', YAW = 'y', PITCH = 'p' };
+enum { GENERAL, TRANS, YAW, PITCH};
 
 enum {
-    TARGET = 't', REL_TARGET = 'T', SPEED = 's', REL_SPEED = 'S', 
-    PAUSE  = 'p', UNPAUSE = 'u', DEBUG_PRINT = 'd', 
+    TARGET, REL_TARGET, SPEED, REL_SPEED, 
+    PAUSE, UNPAUSE, DEBUG_PRINT, 
 };
 
 struct {
-    uint8_t type;
-    uint8_t action;
-    char value[14];
+    unsigned type   : 2;
+    unsigned action : 6;
+    int32_t value;
 } frame;
 
 
 inline int8_t
 process_dtm()
 {
-    static int32_t value;
     static struct _stepper *m;
 
     if (Serial.available() >= 2) {
-        Serial.readBytesUntil('\n', (uint8_t*)&frame, sizeof(frame) - 1);
+        Serial.readBytes((uint8_t*)&frame, sizeof(frame));
 
         m = NULL;
         if (frame.type == TRANS)
@@ -36,19 +35,18 @@ process_dtm()
             m = pitch_p;
 
         if (NULL != m) {
-            value = atoi(frame.value);
             switch (frame.action) {
             case TARGET:
-                rot_set_target(m, value);
+                rot_set_target(m, frame.value);
                 break;
             case REL_TARGET:
-                rot_set_target(m, m->pos + value);
+                rot_set_target(m, m->pos + frame.value);
                 break;
             case SPEED:
-                rot_set_speed(m, value);
+                rot_set_speed(m, frame.value);
                 break;
             case REL_SPEED:
-                rot_set_speed(m, m->speed + value);
+                rot_set_speed(m, m->speed + frame.value);
                 break;
             case PAUSE:
                 m->moving = false; 

@@ -1,2 +1,2 @@
 all:
-	gcc -lbluetooth main.c -o joytest.out
+	gcc -lbluetooth -lm main.c -o joytest.out
