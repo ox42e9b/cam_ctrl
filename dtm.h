@@ -14,7 +14,7 @@ enum {
 };
 
 struct {
-    unsigned type   : 2;
+    unsigned type : 2;
     unsigned action : 6;
     int32_t value;
 } frame;
@@ -78,7 +78,8 @@ process_dtm()
                 Serial.println(m->moving);
                 Serial.println();
                 break;
-            } 
+            }
+            Serial.println(frame.value);
         }  /* очищаем обработанный кадр */
         memset(&frame, 0, sizeof(frame));
     }
@@ -90,7 +91,7 @@ process_dtm()
 int8_t
 init_dtm()
 {
-    Serial.begin(38400);
+    Serial.begin(9600);
 
     return 0;
 }

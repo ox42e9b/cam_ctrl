@@ -32,22 +32,86 @@ enum {
 struct _frame {
     unsigned type   : 2;
     unsigned action : 6;
-    int32_t value;
-} frame;
+    int32_t value; 
+} __attribute__((packed)) frame = {0};
 
 struct _stepper {
-    long dv;  /* фрагментация изменения скорости */
-    long min, max;
-    long max_speed;
-    float scale;  /* (js.val1 - js.val0) * scale - приращение скорости */
-} trans = {.dv = 3200,  .min = 0,        .max = 46000,    .scale = 23000 / 32767.0}, 
-  yaw   = {.dv = 228,   .min = LONG_MIN, .max = LONG_MAX, .scale =  2460 / 32767.0}, 
-  pitch = {.dv = 228,   .min = 0,        .max = 3280,     .scale =  2460 / 32767.0};
+    int8_t type;
+    int32_t dv;  /* фрагментация изменения скорости */
+    int32_t min, max;
+    int32_t max_speed;
+    double scale;  /* (js.val1 - js.val0) * scale - приращение скорости */
+} trans = {.type = TRANS, .dv = 800, .min = -23000,    .max = 23000,    .scale = 12500 / 32767.0}, 
+  yaw   = {.type = YAW,   .dv = 114, .min = -3 * 4720, .max = 3 * 4720, .scale =  2000 / 32767.0}, 
+  pitch = {.type = PITCH, .dv = 114, .min = -1640,     .max = 1640,     .scale =  1600 / 32767.0};
 
 
 struct _stepper *trans_p = &trans;
 struct _stepper *yaw_p   = &yaw;
 struct _stepper *pitch_p = &pitch;
+int sock;
+
+
+ssize_t
+send_frame()
+{
+    return write(sock, &frame, sizeof(frame));
+}
+
+void
+rot_set_target(struct _stepper* m, int32_t value)
+{
+    frame.type = m->type;
+    frame.action = TARGET;
+    frame.value = value;
+    send_frame();
+}
+
+void
+rot_pause(struct _stepper* m)
+{
+    frame.type = m->type;
+    frame.action = PAUSE;
+    send_frame();
+}
+
+void 
+rot_unpause(struct _stepper* m)
+{
+    frame.type = m->type;
+    frame.action = UNPAUSE;
+    send_frame();
+}
+
+void 
+rot_set_speed(struct _stepper *m, int32_t value)
+{
+    frame.type = m->type;
+    frame.action = SPEED;
+    frame.value = value;
+    send_frame();
+}
+
+void 
+rot_set_rel_speed(struct _stepper *m, int32_t value)
+{
+    frame.type = m->type;
+    frame.action = REL_SPEED;
+    frame.value = value;
+    send_frame();
+}
+
+void
+rot_centrate()
+{
+    rot_set_target(trans_p, 0); 
+    rot_set_target(  yaw_p, 0);
+    rot_set_target(pitch_p, 0);
+    rot_unpause(trans_p);
+    rot_unpause(  yaw_p);
+    rot_unpause(pitch_p);
+    //TODO установить скорость
+}
 
 
 int 
@@ -55,17 +119,17 @@ main(int argc, char* argv[])
 {
     struct sockaddr_rc addr = {0};
     char str_addr[18] = "98:D3:71:F9:84:96";
-    int sock, status;
+    int status;
     int joy_fd, *axis = NULL, num_of_axis = 0, num_of_buttons = 0, x;
+    int32_t temp;
     uint32_t prev_time;
     char *button = NULL, name_of_joystick[80];
     struct js_event js_ev;
-    struct _stepper *m;
-    bool reset_sent = false;
+    struct _stepper *m;  
 
     if (2 == argc)
-        strncpy(str_addr, argv[1], 18);
-    
+        strncpy(str_addr, argv[1], 18); 
+
     sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
 
     addr.rc_family = AF_BLUETOOTH;
@@ -81,7 +145,12 @@ main(int argc, char* argv[])
         perror("bluetooth"); 
         return -1;
     }
-    
+    /*sock = open("/dev/ttyUSB0", O_WRONLY);
+    if (-1 == sock) {
+        perror("open /dev/ttyUSB0");
+        return -1;
+    }*/
+
     joy_fd = open(JOYDEV, O_RDONLY); 
    
     if (-1 == joy_fd) {
@@ -107,56 +176,49 @@ main(int argc, char* argv[])
 
         switch (js_ev.type & ~JS_EVENT_INIT) {
 	case JS_EVENT_AXIS:
-            if (!reset_sent)
-                continue;
 	    switch (js_ev.number) {
                 case TRANS_AXIS:
-                    m = trans_p;
-                    frame.type = TRANS;
+                    m = trans_p; 
                     break;
                 case YAW_AXIS:
                     m = yaw_p;
-                    frame.type = YAW;
                     break;
                 case PITCH_AXIS:
                     m = pitch_p;
-                    frame.type = PITCH;
                     break;
             }
-
             /* остановить, если необходимо */
             if (js_ev.value == 0 && axis[js_ev.number] != 0) {
-                frame.action = SPEED;
-                frame.value = 0;
-                write(sock, &frame, sizeof(struct _frame));
-                axis[js_ev.number] = 0;
-                puts("\033[34mstop\033[0m");
+                rot_pause(m);
+                axis[js_ev.number] = js_ev.value;
+                puts("\033[34mstop\033[0m\n");
             }
             /* изменить направление если необходимо */
             else if (((js_ev.value & (1 << 31)) != (axis[js_ev.number] & (1 << 31))) 
                      || (0 != js_ev.value && 0 == axis[js_ev.number])) {
-                frame.action = TARGET;
-                frame.value = (js_ev.value < 0) ? m->min : m->max;
-                write(sock, &frame, sizeof(struct _frame)); 
+                temp = (js_ev.value < 0) ? m->min : m->max;
+                rot_set_target(m, temp);  
+                if (0 != js_ev.value && 0 == axis[js_ev.number])
+                    rot_unpause(m); 
                 axis[js_ev.number] = js_ev.value;
-                puts("\033[32mnew target\033[0m");
+                printf("\033[32mnew target: %d\033[0m\n", temp);
             }
-            frame.action = REL_SPEED;
-            frame.value = round((js_ev.value - axis[js_ev.number]) * m->scale); 
-            if (abs(frame.value) > m->dv) { 
-                write(sock, &frame, sizeof(struct _frame));
+            temp = ((js_ev.value > 0) ? 1 : -1) * (int32_t)((js_ev.value - axis[js_ev.number]) * m->scale / m->dv) * m->dv;
+            if (abs(temp) > 0) { 
+                rot_set_rel_speed(m, temp);
                 axis[js_ev.number] = js_ev.value;
-                printf("\033[35mrel speed: \033[33m%d\033[0m\n", frame.value);
+                printf("\033[35mrel speed: \033[33m%d\033[0m\n", temp);
             }
 	    break;
 	case JS_EVENT_BUTTON:
             if (1 == js_ev.number && js_ev.value == 1) { 
                 frame.type = GENERAL;
                 frame.action = RESET;
-                write(sock, &frame, sizeof(struct _frame));
+                send_frame();  
                 printf("\033[36mreset\033[0m\n");
-                reset_sent = true;
             }
+            else if (9 == js_ev.number && js_ev.value == 1)
+                rot_centrate();
             button[js_ev.number] = js_ev.value;
 	    break;
 	}
