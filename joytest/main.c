@@ -41,9 +41,9 @@ struct _stepper {
     int32_t min, max;
     int32_t max_speed;
     double scale;  /* (js.val1 - js.val0) * scale - приращение скорости */
-} trans = {.type = TRANS, .dv = 800, .min = -23000,    .max = 23000,    .scale = 12500 / 32767.0}, 
-  yaw   = {.type = YAW,   .dv = 114, .min = -3 * 4720, .max = 3 * 4720, .scale =  2000 / 32767.0}, 
-  pitch = {.type = PITCH, .dv = 114, .min = -1640,     .max = 1640,     .scale =  1600 / 32767.0};
+} trans = {.type = TRANS, .dv = 100, .min = -23000,    .max = 23000,    .scale = 12500 / 32767.0}, 
+  yaw   = {.type = YAW,   .dv = 20,  .min = -3 * 4720, .max = 3 * 4720, .scale =  1600 / 32767.0}, 
+  pitch = {.type = PITCH, .dv = 20,  .min = -1640,     .max = 1640,     .scale =  1600 / 32767.0};
 
 
 struct _stepper *trans_p = &trans;
