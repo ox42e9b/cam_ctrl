@@ -5,9 +5,7 @@
 
 
 enum { GENERAL, TRANS, YAW, PITCH};
-
 enum { RESET };
-
 enum {
     TARGET, REL_TARGET, SPEED, REL_SPEED, 
     PAUSE, UNPAUSE, DEBUG_PRINT
@@ -18,6 +16,10 @@ struct {
     unsigned action : 6;
     int32_t value;
 } frame;
+
+
+inline int8_t process_dtm();
+int8_t init_dtm();
 
 
 inline int8_t

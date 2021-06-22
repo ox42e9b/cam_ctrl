@@ -26,9 +26,10 @@ struct _stepper {
   pitch = {0};
 
 
-void rot_set_target(struct _stepper* m, int32_t target);
-void rot_set_speed(struct _stepper* m, int32_t speed);
-inline void rot_tick(struct _stepper* m, uint32_t mcs);
+void rot_set_target(struct _stepper*, int32_t);
+void rot_set_speed(struct _stepper*, int32_t);
+inline void rot_tick(struct _stepper*, uint32_t);
+void rot_reset();
 int8_t rot_init();
 
 struct _stepper *trans_p = &trans;
