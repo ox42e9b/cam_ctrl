@@ -19,6 +19,8 @@
 #define   YAW_AXIS 3
 #define PITCH_AXIS 4
 
+#define SIGN(x) ((x > 0) ? 1 : -1)
+
 
 enum { GENERAL, TRANS, YAW, PITCH};
 
@@ -37,13 +39,13 @@ struct _frame {
 
 struct _stepper {
     int8_t type;
-    int32_t dv;  /* фрагментация изменения скорости */
     int32_t min, max;
-    int32_t max_speed;
-    double scale;  /* (js.val1 - js.val0) * scale - приращение скорости */
-} trans = {.type = TRANS, .dv = 100, .min = -23000,    .max = 23000,    .scale = 12500 / 32767.0}, 
-  yaw   = {.type = YAW,   .dv = 20,  .min = -3 * 4720, .max = 3 * 4720, .scale =  1600 / 32767.0}, 
-  pitch = {.type = PITCH, .dv = 20,  .min = -1640,     .max = 1640,     .scale =  1600 / 32767.0};
+    uint16_t valve;
+    double scale;
+}       /*              левая граница     правая граница     клапан     мак. скорость v          */
+trans = {.type = TRANS, .min = -23000,    .max = 23000,    .valve = 512, .scale =  8192 / 32767.0}, 
+yaw   = {.type = YAW,   .min = -3 * 4720, .max = 3 * 4720, .valve = 64,  .scale =  1024 / 32767.0}, 
+pitch = {.type = PITCH, .min = -1640,     .max = 1640,     .valve = 64,  .scale =  1024 / 32767.0};
 
 
 struct _stepper *trans_p = &trans;
@@ -103,14 +105,17 @@ rot_set_rel_speed(struct _stepper *m, int32_t value)
 
 void
 rot_centrate()
-{
+{   
+    /* 1 : 4 максимальной скорости */
+    rot_set_speed(trans_p, trans.scale * 32767 / 4);
+    rot_set_speed(  yaw_p,   yaw.scale * 32767 / 4);
+    rot_set_speed(pitch_p, pitch.scale * 32767 / 4);
     rot_set_target(trans_p, 0); 
     rot_set_target(  yaw_p, 0);
     rot_set_target(pitch_p, 0);
     rot_unpause(trans_p);
     rot_unpause(  yaw_p);
     rot_unpause(pitch_p);
-    //TODO установить скорость
 }
 
 
@@ -122,7 +127,6 @@ main(int argc, char* argv[])
     int status;
     int joy_fd, *axis = NULL, num_of_axis = 0, num_of_buttons = 0, x;
     int32_t temp;
-    uint32_t prev_time;
     char *button = NULL, name_of_joystick[80];
     struct js_event js_ev;
     struct _stepper *m;  
@@ -140,16 +144,15 @@ main(int argc, char* argv[])
         perror("str2ba");
 
     status = connect(sock, (struct sockaddr*)&addr, sizeof(addr));
-
     if (status < 0) { 
         perror("bluetooth"); 
         return -1;
     }
-    /*sock = open("/dev/ttyUSB0", O_WRONLY);
+    /*sock = open("/dev/null", O_WRONLY);
     if (-1 == sock) {
-        perror("open /dev/ttyUSB0");
+        perror("open /dev/null");
         return -1;
-    }*/
+    } // - для теста без bluetooth */
 
     joy_fd = open(JOYDEV, O_RDONLY); 
    
@@ -162,39 +165,30 @@ main(int argc, char* argv[])
     ioctl(joy_fd, JSIOCGBUTTONS, &num_of_buttons);
     ioctl(joy_fd, JSIOCGNAME(80), &name_of_joystick);
 
-    axis = (int *) calloc( num_of_axis, sizeof( int ) );
-    button = (char *) calloc( num_of_buttons, sizeof( char ) );
+      axis = calloc( num_of_axis,    sizeof(int)  );
+    button = calloc( num_of_buttons, sizeof(char) );
 
     printf("[%s]\n", name_of_joystick);
    
-    prev_time = 0;
     while (1) {
 	read(joy_fd, &js_ev, sizeof(struct js_event));
-        if (js_ev.time - prev_time < 2)
-            continue;
-        prev_time = js_ev.time;
 
         switch (js_ev.type & ~JS_EVENT_INIT) {
 	case JS_EVENT_AXIS:
 	    switch (js_ev.number) {
-                case TRANS_AXIS:
-                    m = trans_p; 
-                    break;
-                case YAW_AXIS:
-                    m = yaw_p;
-                    break;
-                case PITCH_AXIS:
-                    m = pitch_p;
-                    break;
+                case TRANS_AXIS: m = trans_p; break;
+                case YAW_AXIS:   m = yaw_p;   break;
+                case PITCH_AXIS: m = pitch_p; break;
             }
+            js_ev.value *= m->scale;
             /* остановить, если необходимо */
-            if (js_ev.value == 0 && axis[js_ev.number] != 0) {
+            if (0 == js_ev.value && 0 != axis[js_ev.number]) {
                 rot_pause(m);
                 axis[js_ev.number] = js_ev.value;
                 puts("\033[34mstop\033[0m\n");
             }
             /* изменить направление если необходимо */
-            else if (((js_ev.value & (1 << 31)) != (axis[js_ev.number] & (1 << 31))) 
+            else if ((SIGN(js_ev.value) != SIGN(axis[js_ev.number])) 
                      || (0 != js_ev.value && 0 == axis[js_ev.number])) {
                 temp = (js_ev.value < 0) ? m->min : m->max;
                 rot_set_target(m, temp);  
@@ -202,9 +196,9 @@ main(int argc, char* argv[])
                     rot_unpause(m); 
                 axis[js_ev.number] = js_ev.value;
                 printf("\033[32mnew target: %d\033[0m\n", temp);
-            }
-            temp = ((js_ev.value > 0) ? 1 : -1) * (int32_t)((js_ev.value - axis[js_ev.number]) * m->scale / m->dv) * m->dv;
-            if (abs(temp) > 0) { 
+            } 
+            temp = SIGN(js_ev.value) * (js_ev.value - axis[js_ev.number]);
+            if (abs(temp) > m->valve) {  
                 rot_set_rel_speed(m, temp);
                 axis[js_ev.number] = js_ev.value;
                 printf("\033[35mrel speed: \033[33m%d\033[0m\n", temp);
@@ -215,10 +209,12 @@ main(int argc, char* argv[])
                 frame.type = GENERAL;
                 frame.action = RESET;
                 send_frame();  
-                printf("\033[36mreset\033[0m\n");
+                puts("\033[36mreset\033[0m\n");
             }
-            else if (9 == js_ev.number && js_ev.value == 1)
+            else if (9 == js_ev.number && js_ev.value == 1) {
                 rot_centrate();
+                puts("\033[36mcentrate\033[0m\n");
+            }
             button[js_ev.number] = js_ev.value;
 	    break;
 	}

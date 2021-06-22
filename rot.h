@@ -144,7 +144,7 @@ rot_init()
     trans.ini = trans.min;
     yaw.max   = +3 * 4720; 
     yaw.min   = -3 * 4720;
-    yaw.ini   = +128;
+    yaw.ini   =  0;
     pitch.max = +1640;
     pitch.min = -1640; 
     pitch.ini = pitch.min;
